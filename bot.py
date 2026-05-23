@@ -39,6 +39,8 @@ def ask_ai(prompt):
 
     data = response.json()
 
+    print(data)
+
     return data["choices"][0]["message"]["content"]
 
 @bot.event
