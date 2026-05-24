@@ -27,7 +27,7 @@ def ask_ai(prompt):
             "Content-Type": "application/json",
         },
         json={
-            "model": "meta-llama/llama-3.3-8b-instruct:free",
+            "model": "openrouter/free",
             "messages": [
                 {
                     "role": "user",
