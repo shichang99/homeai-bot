@@ -27,7 +27,7 @@ def ask_ai(prompt):
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek/deepseek-chat:free",
+            "model": "meta-llama/llama-3.3-8b-instruct:free",
             "messages": [
                 {
                     "role": "user",
@@ -41,7 +41,11 @@ def ask_ai(prompt):
 
     print(data)
 
-    return data["choices"][0]["message"]["content"]
+    if "choices" in data:
+        return data["choices"][0]["message"]["content"]
+    else:
+        print(data)
+        return "AI 暂时无法回应 😢"
 
 @bot.event
 async def on_message(message):
