@@ -30,7 +30,34 @@ embedding_model = SentenceTransformer(
 async def on_ready():
     print(f'Logged in as {bot.user}')
 
+def search_knowledge(query):
+
+    query_embedding = embedding_model.encode(query).tolist()
+
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3
+    )
+
+    documents = results["documents"][0]
+
+    return "\n".join(documents)
+
 def ask_ai(prompt):
+
+    knowledge = search_knowledge(prompt)
+
+    full_prompt = f"""
+你是一个 Discord AI 管家。
+
+请根据以下知识库内容回答问题。
+
+知识库：
+{knowledge}
+
+用户问题：
+{prompt}
+"""
 
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
@@ -43,7 +70,7 @@ def ask_ai(prompt):
             "messages": [
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": full_prompt
                 }
             ]
         }
@@ -56,7 +83,6 @@ def ask_ai(prompt):
     if "choices" in data:
         return data["choices"][0]["message"]["content"]
     else:
-        print(data)
         return "AI 暂时无法回应 😢"
 
 @bot.event
