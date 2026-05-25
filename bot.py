@@ -1,3 +1,4 @@
+from email.mime import message
 import os
 import requests
 from dotenv import load_dotenv
@@ -22,6 +23,10 @@ collection = client.get_or_create_collection(
     name="knowledge_base"
 )
 
+memory_collection = client.get_or_create_collection(
+    name="user_memories"
+)
+
 embedding_model = SentenceTransformer(
     "all-MiniLM-L6-v2"
 )
@@ -29,6 +34,17 @@ embedding_model = SentenceTransformer(
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+
+def save_memory(user_name, memory_text):
+
+    embedding = embedding_model.encode(memory_text).tolist()
+
+    memory_collection.add(
+        documents=[memory_text],
+        embeddings=[embedding],
+        ids=[f"{user_name}-{hash(memory_text)}"],
+        metadatas=[{"user": user_name}]
+    )
 
 def search_knowledge(query):
 
@@ -43,29 +59,46 @@ def search_knowledge(query):
 
     return "\n".join(documents)
 
-def ask_ai(prompt):
+def search_memory(user_name, query):
+
+    query_embedding = embedding_model.encode(query).tolist()
+
+    results = memory_collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3,
+        where={"user": user_name}
+    )
+
+    documents = results["documents"][0]
+
+    return "\n".join(documents)
+
+def ask_ai(user_name, prompt):
 
     knowledge = search_knowledge(prompt)
+    memory = search_memory(user_name, prompt)
 
     full_prompt = f"""
-你是 Discord 服务器里的 AI 管家。
+    你是 Discord Server 的 AI 管家。
 
-你必须优先根据“知识库”内容回答。
+    你会记得用户长期记忆。
 
-规则：
+    规则：
 
-1. 如果知识库里面有答案，就直接根据知识库回答
-2. 不允许胡乱编造
-3. 不允许说自己不知道，除非知识库真的没有
-4. 回答尽量自然、简短
-5. 你属于这个 Discord Server
+    1. 优先根据记忆与知识库回答
+    2. 不允许胡乱编造
+    3. 回答自然
+    4. 像真正 AI 助手
 
-知识库内容：
-{knowledge}
+    用户长期记忆：
+    {memory}
 
-用户问题：
-{prompt}
-"""
+    知识库内容：
+    {knowledge}
+
+    用户问题：
+    {prompt}
+    """
 
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
@@ -116,6 +149,30 @@ async def on_message(message):
     # 不回复自己
     if message.author == bot.user:
         return
+    
+    memory_keywords = [
+        "我喜欢",
+        "我是",
+        "我的",
+        "我最喜欢",
+        "我讨厌",
+        "我不喜欢",
+        "I like",
+        "I'm", 
+        "I love",
+        "I hate",
+        "I dislike",
+        "My favorite"
+    ]
+
+    if any(keyword in message.content for keyword in memory_keywords):
+
+        save_memory(
+            str(message.author),
+            message.content
+        )
+
+        await message.add_reaction("🧠")
 
     # AI 聊天功能
     if bot.user in message.mentions:
@@ -128,7 +185,10 @@ async def on_message(message):
 
         await message.channel.send("思考中... 🤔")
 
-        ai_response = ask_ai(user_message)
+        ai_response = ask_ai(
+            str(message.author),
+            user_message
+        )
 
         await message.channel.send(ai_response)
 
